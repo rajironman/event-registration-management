@@ -2,13 +2,15 @@ import bcrypt
 from pymongo import MongoClient
 import random
 
+
 # function to get the mongodb database handler
 mongoClient = None
-def get_db_handle(db_name,host='localhost',port=27017,**cred):
+def get_db_handle(db_name):
     global mongoClient
     if not mongoClient:
         try:
-            mongoClient = MongoClient(host=host,port=int(port),**cred)
+            mongo_url = "mongodb+srv://rajironman:14vde7DS680gsQP8@erm.tbrmcs5.mongodb.net/?retryWrites=true&w=majority"
+            mongoClient = MongoClient(mongo_url)
         except Exception as e:
             print(e)
     db_handle = mongoClient[db_name]
@@ -41,7 +43,7 @@ def create_account(username,password):
 def login(username,password):
     data = {}
     data['msg'] = []
-    user_db = get_db_handle('user','localhost',27017)
+    user_db = get_db_handle('user')
     credentials = user_db.credentials.find_one(filter={'username':username})
     if not credentials:
         data['msg'].append('user name does not exists')
@@ -65,7 +67,7 @@ def login(username,password):
     return data
 
 def authenticate(auth_token):
-    user_db = get_db_handle('user','localhost',27017)
+    user_db = get_db_handle('user')
     credential = user_db.credentials.find_one(filter={'username':auth_token['username']})
     if credential and 'auth_key' in credential and 'username' in credential:
         if(str(credential['auth_key']) == str(auth_token['auth_key'])):
