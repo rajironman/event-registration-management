@@ -10,17 +10,23 @@ from django.http import FileResponse
 from authentication import auth
 import os
 
+
+
+
 # function to get the mongodb database handler
 mongoClient = None
-def get_db_handle(db_name,host='localhost',port=27017,**cred):
+def get_db_handle(db_name):
     global mongoClient
     if not mongoClient:
         try:
-            mongoClient = MongoClient(host=host,port=int(port),**cred)
+            mongo_url = "mongodb+srv://rajironman:14vde7DS680gsQP8@erm.tbrmcs5.mongodb.net/?retryWrites=true&w=majority"
+            mongoClient = MongoClient(mongo_url)
         except Exception as e:
             print(e)
     db_handle = mongoClient[db_name]
     return db_handle
+
+
 
 # to merge to dictionary without loss of data for duplicate keys  
 def update_dict(old_data,new_data):
@@ -93,7 +99,7 @@ def events(request):
                 msg.append(str(e))
                 print(e)
 
-    if event_data is 0:
+    if event_data == 0:
         event_data = list(events_db.event_data_collection.find({**username_filter},exclusion_dict).sort(cursor,-1).limit(limit))
 
     # sorting event_data so as to make pagination better by selecting max_id and min_id
@@ -157,19 +163,26 @@ def unregister(request):
 @csrf_exempt
 def create_event(request):
     events_db = get_db_handle('events_db')
+    data = {}
+    msg = data['msg'] = []
+    data['return_code'] = 0
+
 
     # authetication
     if 'username' in request.POST and 'auth_key' in request.POST:
         auth_token = {'username':request.POST['username'],'auth_key':request.POST['auth_key']}
         if not auth.authenticate(auth_token):
             print((auth_token))
-            return JsonResponse({'msg':['authentication failed.Try to login again.'],'return_code':0})
+            msg.append('authentication failed.Try to login again.')
+            return JsonResponse(data)
     else:
-        return JsonResponse({'msg':['login first'],'return_code':0})
+        msg.append('login first')
+        return JsonResponse(data)
 
     #checking whether the image file is 
     if not 'ev_poster' in request.FILES:
-        return JsonResponse({'msg':['poster image is missing'],'return_code':0})
+        msg.append('poster image is missing')
+        return JsonResponse(data)
 
     # arranging the event data
     event_data = {}
@@ -178,12 +191,14 @@ def create_event(request):
         if request.POST[key]:
             event_data[key] = request.POST[key]
         else:
-            return JsonResponse({'msg':[f'field : {key_text} is missing'],'return_code':0})
+            msg.append(f'field : {key_text} is missing')
+            return JsonResponse(data)
 
     title_and_date = {'username':request.POST['username'],'ev_title':event_data['ev_title'],'ev_date':event_data['ev_date']}
     old_event = events_db.event_data_collection.find_one(title_and_date,{"_id":0,"username":0})
     if old_event:
-        return JsonResponse({"msg":['You have already created a event with the same title on the same date'],"return_code":0})
+        msg.append('You have already created a event with the same title on the same date')
+        return JsonResponse(data)
 
     #including the username of the event host
     event_data['username'] = request.POST['username']
@@ -195,39 +210,13 @@ def create_event(request):
         if isinstance(key,str) and (isinstance(value,str) or isinstance(value,list)):
             ev_req_det_dict[key] = value
         else:
-            return JsonResponse({'msg':[f'{key} , {value} at required details are not in correct format'],'return_code':0})
+            msg.append(f'{key} , {value} at required details are not in correct format')
+            return JsonResponse(data)
     
     # adding the required details in event data
     event_data['ev_req_det'] = ev_req_det_dict
 
 
-    # # unique id simulation using a separate counter
-    # id = events_db.event_counter.find_one()
-    # if not id is None:
-    #     id = events_db.event_counter.find_one_and_update({},{"$inc":{"current":1}})
-    # else:
-    #     events_db.event_counter.insert_one({"current":1})
-    #     id = events_db.event_counter.find_one()
-    
-    # ev_id = int(id['current'])
-
-
-    # # to check whether this ev_id already exists in event_data_colllection
-    # loop_counter = 0
-    # while events_db.event_data_collection.find_one({"ev_id":ev_id}) and loop_counter < 3:
-    #     print('loop counter:',loop_counter)
-    #     max_ev_id = list(events_db.event_data_collection.find().sort("ev_id",-1).limit(1))
-
-    #     if len(max_ev_id) == 0:
-    #         break
-    #     ev_id = int(max_ev_id[0]['ev_id']) + 1
-        
-    #     # for controling the number of loop
-    #     loop_counter += 1
-    # else:
-    #     if loop_counter != 0:
-    #         events_db.event_counter.update_one({},{"$set":{"current":ev_id}})
-    #         print("ev_id set : ",ev_id)
     ev_id = 1
     collection_name = 'event_data_collection'
     # to check whether this reg_id already exists in event_data_colllection
@@ -235,7 +224,6 @@ def create_event(request):
     while events_db[collection_name].find_one({"ev_id":ev_id}) and loop_counter < 3:
         print('loop counter:',loop_counter)
         max_id_record = list(events_db[collection_name].find().sort("ev_id",-1).limit(1))
-
         if len(max_id_record) == 0:
             break
         ev_id = int(max_id_record[0]['ev_id']) + 1
@@ -254,11 +242,17 @@ def create_event(request):
         print(Image.open(request.FILES['ev_poster']).verify())
     except Exception as e:
         print(e)
-        return JsonResponse({'msg':['Invalid image, Try selecting other image'],'return_code':0})
+        msg.append('Invalid image, Try selecting other image')
+        return JsonResponse(data)
 
 
     # insert the record  in event details
-    event_object_id = events_db.event_data_collection.insert_one(event_data).inserted_id
+    try:
+        event_object_id = events_db.event_data_collection.insert_one(event_data).inserted_id
+    except Exception as e:
+        msg.append('Error, Try again')
+        return JsonResponse(data)
+
     
     # saving the file
     poster_img_file = request.FILES['ev_poster']
@@ -271,8 +265,10 @@ def create_event(request):
     # updating the poster image path
     update_result = events_db.event_data_collection.update_one({'_id':event_object_id},{'$set':{'ev_poster_path':actual_new_filename}})
     if update_result.modified_count:
-        return JsonResponse({'msg':['successfully created event'],'return_code':1})
-    return JsonResponse({'msg':['Try again, please'],'return_code':0})
+        msg.append('successfully created event')
+        return JsonResponse(data)
+    msg.append('Please, Try again.')
+    return JsonResponse(data)
 
 
 @csrf_exempt
