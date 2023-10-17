@@ -10,9 +10,6 @@ from django.http import FileResponse
 from authentication import auth
 import os
 
-
-
-
 # function to get the mongodb database handler
 mongoClient = None
 def get_db_handle(db_name):
@@ -147,7 +144,7 @@ def unregister(request):
     
     auth_token = {'username':request.POST['username'],'auth_key':request.POST['auth_key']}
     if not auth.authenticate(auth_token):
-        return JsonResponse({'msg':['authentication failed.Try to login again.'],'return_code':0})
+        return JsonResponse({'msg':['authentication failed.Try to login again.'],"error_msg":"AUTH_FAILED",'return_code':0})
 
     ev_id = request.POST['ev_id']
 
@@ -279,7 +276,7 @@ def delete_event(request):
     if 'username' in request.POST and 'auth_key' in request.POST:
         auth_token = {'username':request.POST['username'],'auth_key':request.POST['auth_key']}
         if not auth.authenticate(auth_token):
-            return JsonResponse({'msg':['authentication failed.Try to login again.'],'return_code':0})
+            return JsonResponse({'msg':['authentication failed.Try to login again.'],"error_msg":"AUTH_FAILED",'return_code':0})
     else:
         return JsonResponse({'msg':['login first'],'return_code':0})
 
@@ -313,7 +310,7 @@ def register_in_event(request):
     if 'username' in request.POST and 'auth_key' in request.POST:
         auth_token = {'username':request.POST['username'],'auth_key':request.POST['auth_key']}
         if not auth.authenticate(auth_token):
-            return JsonResponse({'msg':['authentication failed.Try to login again.'],'return_code':0})
+            return JsonResponse({'msg':['authentication failed.Try to login again.'],"error_msg":"AUTH_FAILED",'return_code':0})
     else:
         return JsonResponse({'msg':['login first'],'return_code':0})
     
@@ -360,7 +357,7 @@ def get_participants_details(request):
     if 'username' in request.POST and 'auth_key' in request.POST:
         auth_token = {'username':request.POST['username'],'auth_key':request.POST['auth_key']}
         if not auth.authenticate(auth_token):
-            return JsonResponse({'msg':['authentication failed.Try to login again.'],'return_code':0})
+            return JsonResponse({'msg':['authentication failed.Try to login again.'],"error_msg":"AUTH_FAILED",'return_code':0})
     else:
         return JsonResponse({'msg':['login first'],'return_code':0})
     
@@ -395,7 +392,7 @@ def get_participants_details_csv(request):
     if 'username' in request.POST and 'auth_key' in request.POST:
         auth_token = {'username':request.POST['username'],'auth_key':request.POST['auth_key']}
         if not auth.authenticate(auth_token):
-            return JsonResponse({'msg':['authentication failed.Try to login again.'],'return_code':0})
+            return JsonResponse({'msg':['authentication failed.Try to login again.'],"error_msg":"AUTH_FAILED",'return_code':0})
     else:
         return JsonResponse({'msg':['login first'],'return_code':0})
     
@@ -408,10 +405,16 @@ def get_participants_details_csv(request):
 def feedback(request):
     if not( 'name' in request.POST and len(request.POST['name']) and 'feedback' in request.POST and len(request.POST['feedback'])):
         return JsonResponse({'msg':['Name and feedback are required.'],'return_code':0})
-    events_db = get_db_handle('events_db')
-    if events_db.feedback_collection.find_one({'name':request.POST['name'],'feedback':request.POST['feedback']}):
+    feedbacks_db = get_db_handle('feedbacks_db')
+    if feedbacks_db.feedback_collection.find_one({'name':request.POST['name'],'feedback':request.POST['feedback']}):
         return JsonResponse({'msg':['This feedback with same message and same name already exists.So try again with different feedback message'],'return_code':0})
-    inserted_id = events_db.feedback_collection.insert_one({'name':request.POST['name'],'feedback':request.POST['feedback']}).inserted_id
+    inserted_id = feedbacks_db.feedback_collection.insert_one({'name':request.POST['name'],'feedback':request.POST['feedback']}).inserted_id
     if inserted_id:
         return JsonResponse({'msg':['feedback submitted successfully'],'return_code':1})
     return JsonResponse({'msg':['Try again'],'return_code':0})
+
+@csrf_exempt
+def get_feedbacks(request):
+    feedbacks_db = get_db_handle('feedbacks_db')
+    feedbacks = list(feedbacks_db.feedback_collection.find({},{"_id":0}).sort("_id",-1).limit(30))
+    return JsonResponse({'feedbacks':feedbacks})
