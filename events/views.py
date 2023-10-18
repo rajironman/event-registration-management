@@ -11,13 +11,17 @@ from authentication import auth
 import os
 
 # function to get the mongodb database handler
+MONGODB_CONNECTION_TYPE = "CONNECTION_STRING"
 mongoClient = None
 def get_db_handle(db_name):
     global mongoClient
     if not mongoClient:
         try:
-            mongo_url = "mongodb+srv://rajironman:14vde7DS680gsQP8@erm.tbrmcs5.mongodb.net/?retryWrites=true&w=majority"
-            mongoClient = MongoClient(mongo_url)
+            if MONGODB_CONNECTION_TYPE == "CONNECTION_STRING":
+                mongo_url = "mongodb+srv://rajironman:14vde7DS680gsQP8@erm.tbrmcs5.mongodb.net/?retryWrites=true&w=majority"
+                mongoClient = MongoClient(mongo_url)
+            else:
+                mongoClient = MongoClient(host='localhost',port=27017)
         except Exception as e:
             print(e)
     db_handle = mongoClient[db_name]
